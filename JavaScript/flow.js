@@ -4,121 +4,181 @@
 
 var Flow = {};
 
+// usage: Flow.serial
+Flow.serial(
+    [
+        function (push) {
+            // do job1
+
+            var finish = doJob1();
+
+            if (finish) {
+
+                // finish job1, then do job2
+                push(false, job1Arg);
+            } else {
+
+                // skip the rest job2, job3
+                push(true);
+            }
+        },
+
+        function (push) {
+            // do job2
+
+            var finish = doJob2();
+
+            if (finish) {
+
+                // finish job2 then do job3
+                push(false, job1Arg);
+            } else {
+
+                // skip the rest job3
+                push(true);
+            }
+        },
+
+        function (push) {
+            // do job3
+
+            var finish = doJob3();
+
+            if (finish) {
+
+                // finish all jobs, call callback
+                push(false, job1Arg);
+            } else {
+
+                // skip the rest job
+                push(true);
+            }
+        }
+    ],
+
+    function (cancel, job1Arg, job2Arg, job3Arg) {
+
+        if (cancel) {
+
+            // do with cancel
+
+        } else {
+
+            // do with normal
+        }
+    }
+);
+
 Flow.serial = function (jobs, cb) {
+
     var count = jobs.length;
-    var args = [];
-    var at;
 
-    var finish = function (content) {
+    var args = [false];
 
-        args[at] = content;
+    var at = 1;
 
-        at = at + 1;
+    var push = function (cancel, module) {
 
-        if (at === count) {
+        if (cancel) {
+
+            args = [true];
+
             cb.apply(null, args);
+
             return;
         }
 
-        jobs[at].bind(null, finish).apply(null, args);
-    };
+        args[at] = module;
 
-    at = 0;
-    jobs[at].bind(null, finish).apply(null, args);
-};
+        at = at + 1;
 
-Flow.parallel = function (jobs, cb) {
-    var count = jobs.length;
-    var args = [];
-    var len = 0;
+        if (at > count) {
 
-    var finish = function (i, content) {
-
-        args[i] = content;
-
-        len = len + 1;
-
-        if (len === count) {
             cb.apply(null, args);
+
+        } else {
+
+            jobs[at - 1](push);
         }
     };
 
-    for (var i = 0; i < count; i = i + 1) {
-        jobs[i](finish, i);
-    }
+    jobs[0](push);
+
 };
 
-// test
-var now = function () {
-    return new Date().toLocaleString();
+// usage: Flow.parallel
+Flow.parallel(
+    [
+        function (push) {
+
+            doAsynTask(function () {
+
+                // finish asyn task1
+                push(false, task1Arg);
+
+
+            });
+        },
+        function (push) {
+
+            doAsynTask(function () {
+
+                // finish asyn task2
+                push(false, task2Arg);
+            });
+        }
+    ],
+
+    function (cancel, task1Arg, task2Arg) {
+
+        // when all tasks finish
+
+    }
+);
+
+Flow.parallel = function (jobs, cb) {
+
+    var count = jobs.length;
+
+    var args = [false];
+
+    var len = 0;
+
+    var push = function (i) {
+
+        return function (cancel, module) {
+
+            if (len === -1) {
+
+                return;
+            }
+
+            if (cancel) {
+
+                args = [true];
+
+                cb.apply(null, args);
+
+                args = [];
+
+                len = -1;
+
+                return;
+            }
+
+            args[i] = module;
+
+            len = len + 1;
+
+            if (len === count) {
+
+                cb.apply(null, args);
+            }
+        };
+    };
+
+    for (var i = 1; i <= count; i = i + 1) {
+
+        jobs[i - 1](push(i), i);
+    }
 };
-
-Flow.serial([
-    // job1
-    function (finish) {
-        setTimeout(function () {
-
-            // job doing here, sync doing
-
-            console.log('job1 doing on ' + now());
-            finish(1);
-        }, 5000)
-    },
-    // job2
-    function (finish, arg1) {
-        setTimeout(function () {
-
-            // job doing here, sync doing
-
-            console.log('job2 doing on ' + now());
-            finish(2);
-        }, 3000);
-    },
-    // job3
-    function (finish, arg1, arg2) {
-        setTimeout(function () {
-
-            // job doing here, sync doing
-
-            console.log('job3 doing on ' + now());
-            finish(3);
-        }, 1000);
-    }
-], function (arg1, arg2, arg3) {
-    console.log('finish serial.', arg1, arg2, arg3);
-});
-
-Flow.parallel([
-    // job4
-    function (finish, i) {
-        setTimeout(function () {
-
-            // job doing here, sync doing
-
-            console.log('job4 doing on ' + now());
-            finish(i, 4);
-        }, 5000);
-    },
-    // job5
-    function (finish, i) {
-        setTimeout(function () {
-
-            // job doing here, sync doing
-
-            console.log('job5 doing on ' + now());
-            finish(i, 5);
-        }, 3000);
-    },
-    // job6
-    function (finish, i) {
-        setTimeout(function () {
-
-            // job doing here, sync doing
-
-            console.log('job6 doing on ' + now());
-            finish(i, 6);
-        }, 1000);
-    }
-], function (arg1, arg2, arg3) {
-    console.log('finish parallel.', arg1, arg2, arg3);
-});
